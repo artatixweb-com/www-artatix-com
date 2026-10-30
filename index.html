@@ -3107,5 +3107,95 @@ footer .artatix-logo{width:190px;height:54px;margin-bottom:4px}
 })();
 </script>
 
+
+
+<!-- ARTATIX SAFE EVENT STATUS PATCH: preserves existing page renderers and interactions -->
+<style id="artatix-event-status-and-ticket-alert">
+@keyframes artatixTicketBlink{0%,49%{opacity:1}50%,100%{opacity:.35}}
+.artatix-ticket-alert{display:block;margin:0 0 14px;padding:10px 12px;border:1px solid #fecaca;border-radius:10px;background:#fff1f2;color:#dc2626;font-size:.82rem;font-weight:900;letter-spacing:.02em;text-align:center;animation:artatixTicketBlink .85s steps(2,start) infinite}
+#ticket-category-page .artatix-ticket-alert{width:100%;box-sizing:border-box}
+.artatix-completed-badge{display:inline-block;margin:0 0 8px;padding:6px 9px;border-radius:7px;background:#e2e8f0;color:#334155;font-size:.7rem;font-weight:900}
+#artatixCompletedSection{margin:26px 0 10px;padding:0}
+#artatixCompletedSection .section-title{color:#475569}
+#artatixCompletedList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#artatixCompletedList .home-event-carousel-card{min-width:0;max-width:none;width:100%;opacity:.92}
+@media(max-width:420px){#artatixCompletedList{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.artatix-ticket-alert{animation:none}}
+</style>
+<script id="artatix-safe-event-status">
+(function(){
+ 'use strict';
+ const months={jan:0,januari:0,feb:1,februari:1,mar:2,maret:2,apr:3,april:3,mei:4,may:4,jun:5,juni:5,jul:6,juli:6,agu:7,agustus:7,aug:7,sep:8,september:8,okt:9,oktober:9,oct:9,nov:10,november:10,des:11,desember:11,dec:11};
+ function endDate(value){
+  let s=String(value||'').trim().replace(/^(senin|selasa|rabu|kamis|jumat|sabtu|minggu)\s*,?\s*/i,'');
+  // Supports: 15 Nov 2026, 28 - 29 Nov 2026, 31 Oktober 2026.
+  const m=s.match(/(\d{1,2})(?:\s*[-–—sampai]+\s*(\d{1,2}))?\s+([A-Za-z]+)\s+(\d{4})/i);
+  if(!m)return null;
+  const month=months[m[3].toLowerCase()];if(month===undefined)return null;
+  const d=new Date(Number(m[4]),month,Number(m[2]||m[1]),12,0,0,0);
+  if(d.getFullYear()!==Number(m[4])||d.getMonth()!==month)return null;
+  return d;
+ }
+ function past(ev){const d=endDate(ev&&ev.date);if(!d)return false;const t=new Date();t.setHours(0,0,0,0);return d<t;}
+ function esc(v){return typeof window.escapeHTML==='function'?window.escapeHTML(String(v??'')):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+ function alertHTML(){return '<div class="artatix-ticket-alert">⚠ TIKET TERBATAS • TINGGAL 4 TIKET ⚠</div>';}
+ function eventId(card){
+  const a=card&&card.getAttribute('onclick');if(!a)return null;
+  const m=a.match(/openEventDetail\(\s*['"]([^'"]+)['"]\s*\)/);return m?m[1]:null;
+ }
+ function findEvent(card){const id=eventId(card);return id&&typeof allEvents!=='undefined'&&Array.isArray(allEvents)?allEvents.find(e=>String(e.id)===String(id)):null;}
+ function addAlert(card){if(!card||card.querySelector('.artatix-ticket-alert,.artatix-completed-badge'))return;
+  const target=card.querySelector('.hec-info,.rec-details,.event-row-details,.bs-marquee-info,.bs-content')||card;
+  target.insertAdjacentHTML('afterbegin',alertHTML());
+ }
+ function archiveCard(ev){
+  const img=typeof window.eventImage==='function'?window.eventImage(ev):(ev.image||'');
+  const price=typeof window.eventPrice==='function'?window.eventPrice(ev):0;
+  const money=typeof window.moneyIDR==='function'?window.moneyIDR(price):'';
+  return '<article class="home-event-carousel-card" onclick="openEventDetail('+JSON.stringify(String(ev.id))+')"><img src="'+esc(img)+'" alt="'+esc(ev.title)+'" loading="lazy"><div class="hec-info"><div class="artatix-completed-badge">✓ EVENT SUDAH LEWAT · SUKSES PENYELENGGARAAN</div><strong>'+esc(ev.title)+'</strong><small>'+esc(ev.date)+' · '+esc(ev.time||'')+'</small><small>'+esc(ev.location||'')+'</small><span class="hec-price">Harga mulai dari '+esc(money)+'</span></div></article>';
+ }
+ function decorate(selector,removePast){document.querySelectorAll(selector).forEach(card=>{const ev=findEvent(card);if(ev&&past(ev)&&removePast)card.remove();});}
+ function decorateAll(){
+  decorate('#homeEventsListContainer .home-event-carousel-card',true);
+  decorate('.recommendations-scroll .rec-card',true);
+  decorate('#bsSlider .bs-marquee-card, #bsSlider .bs-slide',true);
+  decorate('#exploreEventsList .event-row-card',true);
+  const all=typeof allEvents!=='undefined'&&Array.isArray(allEvents)?allEvents:[];
+  const finished=all.filter(past).sort((a,b)=>(endDate(b.date)||0)-(endDate(a.date)||0));
+  const home=document.getElementById('homeEventsListContainer');if(!home)return;
+  let section=document.getElementById('artatixCompletedSection');
+  if(!section){section=document.createElement('section');section.id='artatixCompletedSection';section.innerHTML='<div class="section-header" style="cursor:default"><h2 class="section-title">Event Sudah Lewat / Sukses Penyelenggaraan</h2></div><div id="artatixCompletedList"></div>';const more=document.getElementById('homeEventsMore');(more||home).insertAdjacentElement('afterend',section);}
+  const list=document.getElementById('artatixCompletedList');if(list)list.innerHTML=finished.length?finished.map(archiveCard).join(''):'<p style="grid-column:1/-1;color:#64748b;font-size:.85rem">Belum ada event yang selesai.</p>';
+ }
+ function wrap(name){const original=window[name];if(typeof original!=='function'||original.__artatixSafeWrapped)return;
+  function wrapped(){const result=original.apply(this,arguments);try{decorateAll();}catch(e){console.warn('Artatix status display:',e);}return result;}
+  wrapped.__artatixSafeWrapped=true;window[name]=wrapped;
+ }
+ // Existing site functions remain responsible for rendering and all interactive behavior.
+ wrap('renderRequestedHomeEvents');wrap('renderExploreEvents');
+ // Show the limited-ticket notice only on the ticket category selection page.
+ const originalStartTicketSelection=window.startTicketSelection;
+ if(typeof originalStartTicketSelection==='function'&&!originalStartTicketSelection.__artatixTicketNoticeWrapped){
+  function startTicketSelectionWithNotice(){
+   const result=originalStartTicketSelection.apply(this,arguments);
+   try{
+    const box=document.getElementById('categoryTicketOptions');
+    const ev=typeof activeEventForOrder!=='undefined'?activeEventForOrder:null;
+    if(box){
+     const oldNotice=box.querySelector('.artatix-ticket-alert');if(oldNotice)oldNotice.remove();
+     if(ev&&!past(ev))box.insertAdjacentHTML('afterbegin','<div class=\"artatix-ticket-alert\">⚠ TIKET TERBATAS • TINGGAL 4 TIKET ⚠</div>');
+    }
+   }catch(e){console.warn('Artatix ticket notice:',e);}
+   return result;
+  }
+  startTicketSelectionWithNotice.__artatixTicketNoticeWrapped=true;
+  window.startTicketSelection=startTicketSelectionWithNotice;
+ }
+ function boot(){try{decorateAll();}catch(e){console.warn('Artatix status display:',e);}}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
+ window.addEventListener('load',boot,{once:true});
+})();
+</script>
+
 </body>
 </html>
